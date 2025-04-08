@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.9.0",
+    "npm": ">=9.6.7"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build && cp _redirects _headers _routes.json .cloudflare-cache-control dist/ && cp -r functions dist/",
