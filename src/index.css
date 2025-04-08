@@ -1,0 +1,177 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 71.4% 4.1%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+
+    --primary: 293 28% 34%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 220 14.3% 95.9%;
+    --secondary-foreground: 220.9 39.3% 11%;
+
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%;
+
+    --accent: 293 28% 90%;
+    --accent-foreground: 293 28% 34%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 293 28% 60%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .container-content {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .glass-card {
+    @apply bg-white/70 backdrop-blur-sm border border-neutral-200 shadow-subtle rounded-lg;
+  }
+
+  .button-institutional {
+    @apply bg-institutional hover:bg-institutional-dark text-white font-medium py-2 px-6 rounded-md transition-all duration-300 ease-in-out shadow-sm hover:shadow-md flex items-center justify-center;
+  }
+
+  .button-institutional-outline {
+    @apply border border-institutional text-institutional hover:bg-institutional hover:text-white font-medium py-2 px-6 rounded-md transition-all duration-300 ease-in-out;
+  }
+
+  .section-heading {
+    @apply text-3xl sm:text-4xl font-semibold mb-4 text-gray-900;
+  }
+
+  .section-subheading {
+    @apply text-lg text-gray-600 max-w-3xl mb-8;
+  }
+
+  .nav-link {
+    @apply relative px-3 py-2 text-gray-700 hover:text-institutional transition-colors duration-300 after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-institutional after:transition-all after:duration-300 hover:after:w-full;
+  }
+
+  .nav-link-active {
+    @apply text-institutional after:w-full;
+  }
+  
+  /* White underline for nav links with white text */
+  .nav-link.text-white::after {
+    @apply bg-white;
+  }
+  
+  .nav-link-active.text-white::after {
+    @apply bg-white;
+  }
+  
+  /* Remove previous selectors that weren't working */
+  .digital-safety-nav .nav-link::after,
+  .digital-safety-nav .nav-link-active::after {
+    content: none;
+  }
+  
+  .key-stat-value {
+    @apply text-5xl font-bold mb-2;
+  }
+  
+  .key-stat-description {
+    @apply text-gray-600 text-lg;
+  }
+
+  /* Additional utility classes for consistent color usage */
+  .link {
+    @apply text-institutional hover:text-institutional-dark transition-colors duration-300;
+  }
+
+  .icon {
+    @apply text-institutional;
+  }
+
+  .badge {
+    @apply bg-institutional-100 text-institutional px-2 py-0.5 rounded-md text-sm;
+  }
+
+  .card-highlight {
+    @apply border-l-4 border-institutional;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .text-wrap {
+    text-wrap: wrap;
+  }
+}
+
+.shadow-md {
+  box-shadow: none;
+}
+
+/* Hide all image captions */
+figcaption, 
+.image-caption, 
+figure > .caption, 
+.wp-caption-text,
+.image-description {
+  display: none !important;
+}
+
+/* Override any remaining blue colors */
+a {
+  color: hsl(var(--primary));
+}
+
+a:hover {
+  color: hsl(var(--primary-foreground));
+}
+
+.text-blue-600, .text-blue-700, .text-indigo-600, .text-indigo-700 {
+  color: hsl(var(--primary)) !important;
+}
+
+.bg-blue-600, .bg-blue-700, .bg-indigo-600, .bg-indigo-700 {
+  background-color: hsl(var(--primary)) !important;
+}
+
+.hover\:bg-blue-700:hover, .hover\:bg-indigo-700:hover {
+  background-color: hsl(var(--primary-foreground)) !important;
+}
+
+.hover\:text-blue-700:hover, .hover\:text-indigo-700:hover {
+  color: hsl(var(--primary-foreground)) !important;
+}
+

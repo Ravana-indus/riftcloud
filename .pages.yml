@@ -1,0 +1,12 @@
+build:
+  command: npm run build:cloudflare
+  environment:
+    NODE_VERSION: 18.17.1
+  output_directory: dist
+  root_directory: / 
+
+functions:
+  - pattern: /assets/*.js
+    function: functions/_middleware.js
+  - pattern: /assets/*.mjs
+    function: functions/_middleware.js 

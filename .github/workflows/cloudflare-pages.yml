@@ -1,0 +1,58 @@
+name: Deploy to CloudFlare Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to CloudFlare Pages
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Create production env file
+        run: |
+          cat > .env.production << EOF
+          # API Configuration
+          API_BASE_URL=${{ secrets.API_BASE_URL }}
+          API_TIMEOUT=30000
+          API_TOKEN=${{ secrets.API_TOKEN }}
+
+          # Payment Configuration
+          PAYHERE_MERCHANT_ID=${{ secrets.PAYHERE_MERCHANT_ID }}
+          PAYHERE_MERCHANT_SECRET=${{ secrets.PAYHERE_MERCHANT_SECRET }}
+
+          # Website Configuration
+          VITE_SITE_URL=${{ secrets.VITE_SITE_URL }}
+          VITE_API_BASE=${{ secrets.VITE_API_BASE }}
+
+          # Cache Control
+          ENABLE_CACHE=true
+          CACHE_MAX_AGE=86400
+          EOF
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to CloudFlare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: ravanarift
+          directory: dist
+          # Optional: Enable this for custom domains
+          # customDomain: rift.ravanaacademy.com 

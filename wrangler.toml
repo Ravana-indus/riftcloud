@@ -1,0 +1,6 @@
+# Cloudflare Pages configuration
+name = "ravana-iof"
+compatibility_date = "2023-10-30"
+
+# Pages configuration
+pages_build_output_dir = "dist" 
