@@ -49,14 +49,19 @@ const ThankYou = () => {
     try {
       setIsCreatingMockPayment(true);
       
+      // Get amount and currency from URL parameters
+      const queryParams = new URLSearchParams(location.search);
+      const amount = parseFloat(queryParams.get('amount') || '0');
+      const currency = queryParams.get('currency') || 'LKR';
+      
       // Use the direct payment entry creation method
       await processPaymentReturn(
         leadId,
         salesOrderId,
         paymentStatus === 'success' ? 'success' : 'cancelled',
         'Individual', // Using default customer
-        paymentStatus === 'success' ? 100 : 0, // Amount
-        'LKR' // Currency
+        amount, // Use actual amount from URL
+        currency // Use actual currency from URL
       );
       
       console.log(`Payment entry created for ${paymentStatus} payment`);
@@ -435,4 +440,4 @@ const ThankYou = () => {
   );
 };
 
-export default ThankYou; 
+export default ThankYou;

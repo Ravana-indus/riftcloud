@@ -71,7 +71,7 @@ export default async function handler(req, res) {
     // Extract essential data
     const leadId = custom_1 || '';
     const customerName = custom_2 || 'Individual';
-    const paymentAmount = parseFloat(amount) || 0;
+    const paymentAmount = parseFloat(amount) || 0;  // Get actual amount from PayHere notification
     const paymentReference = payment_id || `PAYHERE-${Date.now()}`;
     
     console.log('Extracted payment data:', {
@@ -91,7 +91,7 @@ export default async function handler(req, res) {
         leadId,
         customerName,
         itemCode: 'COURSE-001',
-        amount: paymentAmount,
+        amount: paymentAmount,  // Use actual amount from PayHere
         currency
       });
 
@@ -148,4 +148,4 @@ export default async function handler(req, res) {
       error: error.message || 'Unknown error'
     });
   }
-} 
+}

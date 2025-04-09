@@ -454,9 +454,14 @@ export const mockPayhereCheckout = async (paymentData: Omit<PaymentData, 'hash' 
           const mockPaymentRef = `MOCK-PH-${Date.now()}`;
           console.log(`Mock payment reference created: ${mockPaymentRef}`);
           
+          // Add amount and currency to return URL
+          const successUrl = new URL(paymentData.return_url);
+          successUrl.searchParams.append('amount', paymentData.amount.toString());
+          successUrl.searchParams.append('currency', paymentData.currency);
+          
           // Direct redirect to success URL without API call
           console.log('Redirecting to successful payment return URL');
-          window.location.href = paymentData.return_url;
+          window.location.href = successUrl.toString();
           resolve();
         });
       }
@@ -545,7 +550,10 @@ export const initiatePayhereCheckout = async (paymentData: Omit<PaymentData, 'ha
       // Configure SDK - sandbox or live
       payhere.onCompleted = function onComplete(orderId: string) {
         console.log("Payment completed. OrderID:" + orderId);
-        window.location.href = paymentData.return_url;
+        const successUrl = new URL(paymentData.return_url);
+        successUrl.searchParams.append('amount', paymentData.amount.toString());
+        successUrl.searchParams.append('currency', paymentData.currency);
+        window.location.href = successUrl.toString();
       };
 
       payhere.onDismissed = function onDismissed() {
@@ -902,4 +910,4 @@ export default {
   createSalesOrder,
   createSuccessPaymentEntry,
   createZeroPaymentEntry
-}; 
+};

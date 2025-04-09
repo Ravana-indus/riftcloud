@@ -48,10 +48,12 @@ export const usePaymentProcess = () => {
       
       // 1. Create a customer in the ERP system
       const customerData: CustomerData = {
-        customer_name: registeredCustomerName,
+        customer_name: `${leadData.first_name} ${leadData.last_name}`,
         email: leadData.email_id,
         phone: leadData.mobile_no,
-        country: leadData.preferred_time_zone?.toString() || 'Sri Lanka'
+        address: leadData.custom_address,
+        city: leadData.custom_city,
+        country: leadData.custom_country || leadData.preferred_time_zone?.toString() || 'Sri Lanka'
       };
       
       // Use the registered customer name as fallback
@@ -145,7 +147,7 @@ export const usePaymentProcess = () => {
         merchant_id: PAYHERE_MERCHANT_ID,
         return_url: `${baseUrl}/thank-you?lead=${leadId}&payment=success${successParams}`,
         cancel_url: `${baseUrl}/thank-you?lead=${leadId}&payment=cancelled${cancelParams}`,
-        notify_url: `${baseUrl}/api/payment/notify`, // Server-side notification endpoint
+        notify_url: `${baseUrl}/api/payment/notify`,
         order_id: uniqueOrderId,
         items: `Registration for ${courseType || 'RIFT Course'}`,
         currency: currency,
@@ -154,18 +156,13 @@ export const usePaymentProcess = () => {
         last_name: leadData.last_name || '',
         email: leadData.email_id || '',
         phone: leadData.mobile_no || '',
-        // Optional fields - might not be present in all lead data
-        address: '', // No address in lead data
-        city: '',    // No city in lead data
-        country: leadData.preferred_time_zone?.toString() || 'Sri Lanka',
-        custom_1: leadId, // Store lead ID as custom parameter
-        custom_2: customerName, // Store customer name as custom parameter
+        address: leadData.custom_address || '',
+        city: leadData.custom_city || '',
+        country: leadData.custom_country || leadData.preferred_time_zone?.toString() || 'Sri Lanka',
+        custom_1: leadId,
+        custom_2: customerName,
+        custom_3: salesOrderId || ''
       };
-      
-      // Add sales order ID reference if we have one
-      if (salesOrderId) {
-        paymentData.custom_3 = salesOrderId;
-      }
       
       // 4. Initiate Payhere checkout - hash will be generated server-side
       console.log('Initiating PayHere checkout with data:', {
@@ -357,4 +354,4 @@ export const usePaymentProcess = () => {
   };
 };
 
-export default usePaymentProcess; 
+export default usePaymentProcess;

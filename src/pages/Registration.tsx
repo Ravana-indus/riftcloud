@@ -18,22 +18,10 @@ const Registration = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Use the lead registration hook
-  const { 
-    submitRegistration, 
-    isSubmitting, 
-    error: submissionError, 
-    success,
-    leadId 
-  } = useLeadRegistration();
-  
-  // Use the payment process hook
-  const {
-    processPayherePayment,
-    isProcessing: isProcessingPayment,
-    error: paymentError
-  } = usePaymentProcess();
-  
+  // Add country detection
+  const { country: detectedCountry, loading: locationLoading, error: locationError } = useGeoLocation();
+  const [selectedCountry, setSelectedCountry] = useState<string>('default');
+
   // Form data state
   const [formData, setFormData] = useState({
     firstName: '',
@@ -52,11 +40,27 @@ const Registration = () => {
     custom_registering_with_a_family_member: false,
     custom_family_member_name: '',
     custom_promo_code: '',
+    custom_address: '',
+    custom_city: '',
+    custom_country: 'default'  // Initialize with default
   });
   
-  // Add country detection
-  const { country: detectedCountry, loading: locationLoading, error: locationError } = useGeoLocation();
-  const [selectedCountry, setSelectedCountry] = useState<string>('default');
+  // Use the lead registration hook
+  const { 
+    submitRegistration, 
+    isSubmitting, 
+    error: submissionError, 
+    success,
+    leadId 
+  } = useLeadRegistration();
+  
+  // Use the payment process hook
+  const {
+    processPayherePayment,
+    isProcessing: isProcessingPayment,
+    error: paymentError
+  } = usePaymentProcess();
+  
   const [pricingInfo, setPricingInfo] = useState<PricingOption>(getPricingByCountry('default'));
   
   // Add state for calculated price
@@ -174,6 +178,9 @@ const Registration = () => {
         custom_promo_code: formData.custom_promo_code || undefined,
         custom_amount: calculatedPrice?.amount,
         custom_currency: calculatedPrice?.currency as 'LKR' | 'USD' | 'EUR' | 'GBP' | 'CAD' | 'INR' | undefined,
+        custom_address: formData.custom_address,
+        custom_city: formData.custom_city,
+        custom_country: formData.custom_country
       };
       
       // Show success message
@@ -201,6 +208,9 @@ const Registration = () => {
         custom_registering_with_a_family_member: false,
         custom_family_member_name: '',
         custom_promo_code: '',
+        custom_address: '',
+        custom_city: '',
+        custom_country: selectedCountry || 'default'
       });
       
       // Navigate to the payment review page with lead data
@@ -369,6 +379,9 @@ const Registration = () => {
       custom_promo_code: formData.custom_promo_code || undefined,
       custom_amount: calculatedPrice?.amount,
       custom_currency: calculatedPrice?.currency as 'LKR' | 'USD' | 'EUR' | 'GBP' | 'CAD' | 'INR' | undefined,
+      custom_address: formData.custom_address,
+      custom_city: formData.custom_city,
+      custom_country: formData.custom_country
     };
     
     // Submit the lead registration using the hook
@@ -779,6 +792,47 @@ const Registration = () => {
                   ></textarea>
                 </div>
                 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                  <Input 
+                    type="text" 
+                    name="custom_address"
+                    value={formData.custom_address}
+                    onChange={handleInputChange}
+                    placeholder="Your address"
+                    className="w-full"
+                    required
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                    <Input 
+                      type="text" 
+                      name="custom_city"
+                      value={formData.custom_city}
+                      onChange={handleInputChange}
+                      placeholder="Your city"
+                      className="w-full"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                    <Input 
+                      type="text" 
+                      name="custom_country"
+                      value={formData.custom_country}
+                      onChange={handleInputChange}
+                      placeholder="Your country"
+                      className="w-full"
+                      required
+                    />
+                  </div>
+                </div>
+                
                 <div className="p-4 border border-gray-200 rounded-lg mb-4">
                   <label className="flex items-start">
                     <input 
@@ -1081,4 +1135,4 @@ function Smartphone(props) {
       <path d="M12 18h.01" />
     </svg>
   )
-} 
+}
