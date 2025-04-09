@@ -43,112 +43,23 @@ export const usePaymentProcess = () => {
       console.log(`Running in ${isDevelopment ? 'development' : 'production'} environment`);
       
       // Get the registered customer name to use as fallback
-      const registeredCustomerName = leadData.lead_name || `${leadData.first_name} ${leadData.last_name}`;
-      console.log('Registered customer name:', registeredCustomerName);
-      
-      // 1. Create a customer in the ERP system
-      const customerData: CustomerData = {
-        customer_name: `${leadData.first_name} ${leadData.last_name}`,
-        email: leadData.email_id,
-        phone: leadData.mobile_no,
-        address: leadData.custom_address,
-        city: leadData.custom_city,
-        country: leadData.custom_country || leadData.preferred_time_zone?.toString() || 'Sri Lanka'
-      };
-      
-      // Use the registered customer name as fallback
-      let customerName = registeredCustomerName;
-      
-      try {
-        const customerResponse = await createCustomer(customerData);
-        
-        if (customerResponse.success && customerResponse.data) {
-          console.log('Customer created successfully:', customerResponse.data);
-          // Get the customer name from the response and clean it
-          customerName = cleanCustomerName(customerResponse.data.name);
-          console.log('Using customer name:', customerName);
-        } else {
-          console.warn('Failed to create customer, using registered name as fallback:', customerResponse.error);
-        }
-      } catch (customerError) {
-        console.warn('Error creating customer, using registered name as fallback:', customerError);
-      }
-      
-      // 2. Create a sales order first
-      const orderId = `ORDER-${leadId}-${Date.now()}`;
+      const customerName = `${leadData.first_name} ${leadData.last_name}`;
       const currency = leadData.custom_currency || 'LKR';
       const amount = leadData.custom_amount || 0;
       const courseType = `${leadData.custom_preferred_mode || ''} - ${leadData.custom_preferred_type || ''}`.trim();
       
-      // Determine the correct item code based on country and mode
-      // For now, using a default item code
-      const itemCode = 'RIFT-DS-LK-ON-25'; 
+      // Create a unique order ID
+      const orderId = `ORDER-${leadId}-${Date.now()}`;
       
-      // Format date as YYYY-MM-DD for Frappe API
-      const today = new Date();
-      const formattedDate = today.toISOString().split('T')[0]; // YYYY-MM-DD format
-      
-      let salesOrderId = null;
-      
-      try {
-        const salesOrderData: SalesOrderData = {
-          naming_series: 'SAL-ORD-.YYYY.-',
-          transaction_date: formattedDate,
-          delivery_date: formattedDate,
-          customer: customerName,
-          order_type: 'Sales',
-          currency: currency,
-          items: [
-            {
-              item_code: itemCode,
-              qty: 1,
-              rate: amount,
-              amount: amount
-            }
-          ],
-          taxes: [
-            {
-              charge_type: 'On Net Total',
-              account_head: 'VAT - RU',
-              description: 'VAT Tax'
-            }
-          ],
-          disable_rounded_total: 1,
-          custom_lead_reference: leadId
-        };
-        
-        console.log('Creating sales order:', salesOrderData);
-        const salesOrderResponse = await createSalesOrder(salesOrderData);
-        
-        if (!salesOrderResponse.success || !salesOrderResponse.data) {
-          console.warn('Failed to create sales order, continuing with payment:', salesOrderResponse.error);
-        } else {
-          // Store sales order ID for later reference
-          salesOrderId = salesOrderResponse.data.name;
-          setPendingSalesOrderId(salesOrderId);
-          console.log('Sales order created successfully:', salesOrderId);
-        }
-      } catch (salesOrderError) {
-        console.warn('Error creating sales order:', salesOrderError);
-        // Continue with payment anyway
-      }
-      
-      // 3. Prepare payment data for Payhere
+      // Prepare payment data for Payhere
       const baseUrl = window.location.origin;
-      
-      // Include sales order ID in URLs if we have one
-      const successParams = salesOrderId ? `&sales_order=${salesOrderId}` : '';
-      const cancelParams = salesOrderId ? `&sales_order=${salesOrderId}` : '';
-      
-      // Create unique order ID with timestamp to ensure uniqueness
-      const uniqueOrderId = `${orderId}-${Date.now()}`;
       
       const paymentData: Omit<PaymentData, 'hash' | 'merchant_secret'> = {
         merchant_id: PAYHERE_MERCHANT_ID,
-        return_url: `${baseUrl}/thank-you?lead=${leadId}&payment=success${successParams}`,
-        cancel_url: `${baseUrl}/thank-you?lead=${leadId}&payment=cancelled${cancelParams}`,
+        return_url: `${baseUrl}/thank-you?lead=${leadId}&payment=success`,
+        cancel_url: `${baseUrl}/thank-you?lead=${leadId}&payment=cancelled`,
         notify_url: `${baseUrl}/api/payment/notify`,
-        order_id: uniqueOrderId,
+        order_id: orderId,
         items: `Registration for ${courseType || 'RIFT Course'}`,
         currency: currency,
         amount: amount,
@@ -159,27 +70,27 @@ export const usePaymentProcess = () => {
         address: leadData.custom_address || '',
         city: leadData.custom_city || '',
         country: leadData.custom_country || leadData.preferred_time_zone?.toString() || 'Sri Lanka',
-        custom_1: leadId,
-        custom_2: customerName,
-        custom_3: salesOrderId || ''
+        custom_1: leadId,  // Pass leadId for reference
+        custom_2: customerName,  // Pass customer name
       };
       
-      // 4. Initiate Payhere checkout - hash will be generated server-side
+      // Initiate Payhere checkout - hash will be generated server-side
       console.log('Initiating PayHere checkout with data:', {
-        orderId: uniqueOrderId,
+        orderId: orderId,
         amount,
         currency,
         customerName
       });
+      
       await initiatePayhereCheckout(paymentData);
       
-      // The rest of the process will be handled in the return_url
-      // We'll create the payment entry when the user returns from the payment gateway
+      // The rest of the process (sales order and payment entry creation) 
+      // will be handled in the notification handler after successful payment
       
     } catch (err) {
       console.error('Payment processing error:', err);
       setError(err instanceof Error ? err.message : 'Unknown payment processing error');
-      throw err; // Re-throw to allow handling by the component
+      throw err;
     } finally {
       setIsProcessing(false);
     }

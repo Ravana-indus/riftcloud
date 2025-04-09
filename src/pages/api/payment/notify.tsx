@@ -71,7 +71,7 @@ export default async function handler(req, res) {
     // Extract essential data
     const leadId = custom_1 || '';
     const customerName = custom_2 || 'Individual';
-    const paymentAmount = parseFloat(amount) || 0;  // Get actual amount from PayHere notification
+    const paymentAmount = parseFloat(amount) || 0;
     const paymentReference = payment_id || `PAYHERE-${Date.now()}`;
     
     console.log('Extracted payment data:', {
@@ -86,12 +86,12 @@ export default async function handler(req, res) {
     if (status_code == 2) {
       console.log('Payment successful. Creating sales order...');
       
-      // Create sales order first
+      // Create sales order with the actual amount from PayHere payment
       const salesOrderResult = await createSalesOrder({
         leadId,
         customerName,
-        itemCode: 'COURSE-001',
-        amount: paymentAmount,  // Use actual amount from PayHere
+        itemCode: 'RIFT-DS-LK-ON-25', // Using consistent item code
+        amount: paymentAmount,  // Use actual amount from PayHere payment
         currency
       });
 
