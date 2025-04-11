@@ -486,7 +486,7 @@ export const mockPayhereCheckout = async (paymentData: Omit<PaymentData, 'hash' 
             if (document.body.contains(mockOverlay)) {
               document.body.removeChild(mockOverlay);
               console.log('Auto-redirecting to success URL after timeout');
-              window.location.href = paymentData.return_url;
+              window.location.href = successUrl.toString();
               resolve();
             }
           }, 2000);
@@ -825,12 +825,20 @@ export const createSalesOrder = async (salesOrderData: SalesOrderData): Promise<
   try {
     console.log('Creating sales order with data:', salesOrderData);
     
+    // First check if customer exists
+    const checkCustomerResponse = await fetch(`${API_BASE_URL}/resource/Customer/${encodeURIComponent(salesOrderData.customer)}`, {
+      method: 'GET',
+      headers: getApiHeaders()
+    });
+
+    if (!checkCustomerResponse.ok) {
+      console.log('Customer does not exist, using "Individual" customer');
+      salesOrderData.customer = 'Individual';
+    }
+    
     const response = await fetch(`${API_BASE_URL}/resource/Sales Order`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'token 0d596da8ae9f32d:ce5ef45704aab11'
-      },
+      headers: getApiHeaders(),
       body: JSON.stringify(salesOrderData)
     });
 
@@ -838,7 +846,11 @@ export const createSalesOrder = async (salesOrderData: SalesOrderData): Promise<
     
     if (!response.ok) {
       console.error('Error creating sales order:', responseData);
-      return { success: false, error: responseData.exception || responseData.message || 'API error' };
+      return { 
+        success: false, 
+        error: responseData.exception || responseData.message || 'API error',
+        data: responseData
+      };
     }
 
     return { success: true, data: responseData.data || responseData };

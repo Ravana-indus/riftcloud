@@ -27,6 +27,84 @@ export const usePaymentProcess = () => {
   const location = useLocation();
   
   /**
+   * Creates a sales order for a lead before initiating payment
+   * @param leadData The lead data
+   * @param leadId The lead ID
+   */
+  const createOrderForLead = async (
+    leadData: LeadData,
+    leadId: string
+  ): Promise<string | null> => {
+    try {
+      console.log('Creating sales order for lead:', leadId);
+      const customerName = `${leadData.first_name} ${leadData.last_name}`;
+      const cleanedCustomerName = cleanCustomerName(customerName);
+      
+      // Create customer first
+      console.log('Creating customer:', cleanedCustomerName);
+      const customerResult = await createCustomer({
+        customer_name: cleanedCustomerName,
+        email: leadData.email_id || '',
+        phone: leadData.mobile_no || '',
+        address: leadData.custom_address,
+        city: leadData.custom_city,
+        country: leadData.custom_country || leadData.preferred_time_zone?.toString() || 'Sri Lanka'
+      });
+
+      if (!customerResult.success) {
+        console.error('Failed to create customer:', customerResult.error);
+        // Continue with 'Individual' customer as fallback
+        console.log('Using "Individual" customer as fallback');
+      }
+
+      const formattedDate = (() => {
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      })();
+      
+      // Prepare sales order data with correct item code
+      const salesOrderData: SalesOrderData = {
+        naming_series: 'SAL-ORD-.YYYY.-',
+        transaction_date: formattedDate,
+        delivery_date: formattedDate,
+        customer: customerResult.success ? cleanedCustomerName : 'Individual',
+        order_type: 'Sales',
+        currency: leadData.custom_currency || 'LKR',
+        items: [
+          {
+            item_code: 'RIFT-DS-LK-ON-25', // Updated item code
+            qty: 1,
+            rate: leadData.custom_amount || 0,
+            amount: leadData.custom_amount || 0
+          }
+        ],
+        custom_lead_reference: leadId
+      };
+      
+      // Create sales order
+      console.log('Submitting sales order:', salesOrderData);
+      const response = await createSalesOrder(salesOrderData);
+      
+      if (!response.success || !response.data || !response.data.name) {
+        console.error('Failed to create sales order:', response.error);
+        return null;
+      }
+      
+      const salesOrderId = response.data.name;
+      console.log('Sales order created successfully:', salesOrderId);
+      setPendingSalesOrderId(salesOrderId);
+      
+      return salesOrderId;
+    } catch (error) {
+      console.error('Error creating sales order:', error);
+      return null;
+    }
+  };
+  
+  /**
    * Process a Payhere payment
    * @param leadData The submitted lead data
    * @param leadId The lead ID returned from the API
@@ -36,33 +114,46 @@ export const usePaymentProcess = () => {
     setError(null);
     
     try {
-      // Detect if we're running in development environment
-      const isDevelopment = window.location.hostname === 'localhost' || 
-                            window.location.hostname === '127.0.0.1';
+      // Create sales order first
+      console.log('Creating sales order before payment...');
+      const salesOrderId = await createOrderForLead(leadData, leadId);
       
-      console.log(`Running in ${isDevelopment ? 'development' : 'production'} environment`);
+      if (!salesOrderId) {
+        throw new Error('Failed to create sales order. Cannot proceed with payment.');
+      }
+
+      console.log(`Successfully created sales order ${salesOrderId}, proceeding with payment...`);
       
-      // Get the registered customer name to use as fallback
+      // Get the registered customer name
       const customerName = `${leadData.first_name} ${leadData.last_name}`;
       const currency = leadData.custom_currency || 'LKR';
       const amount = leadData.custom_amount || 0;
-      const courseType = `${leadData.custom_preferred_mode || ''} - ${leadData.custom_preferred_type || ''}`.trim();
       
-      // Create a unique order ID
-      const orderId = `ORDER-${leadId}-${Date.now()}`;
+      // Create a unique order ID that includes the sales order reference
+      const orderId = `ORDER-${salesOrderId}-${Date.now()}`;
       
       // Prepare payment data for Payhere
       const baseUrl = window.location.origin;
       
+      const returnUrl = new URL(`${baseUrl}/thank-you`);
+      returnUrl.searchParams.append('lead', leadId);
+      returnUrl.searchParams.append('payment', 'success');
+      returnUrl.searchParams.append('salesOrder', salesOrderId);
+      
+      const cancelUrl = new URL(`${baseUrl}/thank-you`);
+      cancelUrl.searchParams.append('lead', leadId);
+      cancelUrl.searchParams.append('payment', 'cancelled');
+      cancelUrl.searchParams.append('salesOrder', salesOrderId);
+
       const paymentData: Omit<PaymentData, 'hash' | 'merchant_secret'> = {
         merchant_id: PAYHERE_MERCHANT_ID,
-        return_url: `${baseUrl}/thank-you?lead=${leadId}&payment=success`,
-        cancel_url: `${baseUrl}/thank-you?lead=${leadId}&payment=cancelled`,
+        return_url: returnUrl.toString(),
+        cancel_url: cancelUrl.toString(),
         notify_url: `${baseUrl}/api/payment/notify`,
         order_id: orderId,
-        items: `Registration for ${courseType || 'RIFT Course'}`,
-        currency: currency,
-        amount: amount,
+        items: `Registration for ${leadData.custom_preferred_mode || 'RIFT'} Course`,
+        currency,
+        amount,
         first_name: leadData.first_name || '',
         last_name: leadData.last_name || '',
         email: leadData.email_id || '',
@@ -70,22 +161,20 @@ export const usePaymentProcess = () => {
         address: leadData.custom_address || '',
         city: leadData.custom_city || '',
         country: leadData.custom_country || leadData.preferred_time_zone?.toString() || 'Sri Lanka',
-        custom_1: leadId,  // Pass leadId for reference
-        custom_2: customerName,  // Pass customer name
+        custom_1: leadId,
+        custom_2: customerName,
+        custom_3: salesOrderId // Always include the sales order ID
       };
-      
-      // Initiate Payhere checkout - hash will be generated server-side
+
       console.log('Initiating PayHere checkout with data:', {
-        orderId: orderId,
+        orderId,
         amount,
         currency,
-        customerName
+        customerName,
+        salesOrderId
       });
       
       await initiatePayhereCheckout(paymentData);
-      
-      // The rest of the process (sales order and payment entry creation) 
-      // will be handled in the notification handler after successful payment
       
     } catch (err) {
       console.error('Payment processing error:', err);
@@ -112,6 +201,17 @@ export const usePaymentProcess = () => {
     paymentReference: string
   ): Promise<string | null> => {
     try {
+      // Validate parameters
+      if (!salesOrderId) {
+        console.error('No sales order ID provided for payment entry');
+        throw new Error('No sales order ID provided for payment entry');
+      }
+      
+      if (amount <= 0) {
+        console.error('Invalid payment amount:', amount);
+        throw new Error('Invalid payment amount');
+      }
+      
       // Clean the customer name to ensure it's valid
       customerName = cleanCustomerName(customerName);
       console.log('Using customer name for payment entry:', customerName);
@@ -136,6 +236,7 @@ export const usePaymentProcess = () => {
       
       const paymentId = paymentResponse.paymentId;
       console.log('Payment entry created successfully:', paymentId);
+      setPendingPaymentId(paymentId || null);
       return paymentId || null;
     } catch (error) {
       console.error('Error creating payment entry:', error);
@@ -155,6 +256,12 @@ export const usePaymentProcess = () => {
     customerName: string
   ): Promise<string | null> => {
     try {
+      // Validate parameters
+      if (!salesOrderId) {
+        console.error('No sales order ID provided for zero payment entry');
+        throw new Error('No sales order ID provided for zero payment entry');
+      }
+      
       // Clean the customer name to ensure it's valid
       customerName = cleanCustomerName(customerName);
       console.log('Using customer name for zero payment entry:', customerName);
@@ -177,6 +284,7 @@ export const usePaymentProcess = () => {
       
       const paymentId = paymentResponse.paymentId;
       console.log('Zero-amount payment entry created successfully:', paymentId);
+      setPendingPaymentId(paymentId || null);
       return paymentId || null;
     } catch (error) {
       console.error('Error creating zero-amount payment entry:', error);
@@ -202,9 +310,71 @@ export const usePaymentProcess = () => {
     currency: string
   ): Promise<void> => {
     try {
+      console.log('Processing payment return:', {
+        leadId,
+        salesOrderId,
+        paymentStatus,
+        customerName,
+        amount,
+        currency
+      });
+      
       if (!salesOrderId) {
         console.error('No sales order ID provided for payment return processing');
-        return;
+        
+        // We don't have a sales order ID, so we need to create one
+        console.log('No sales order ID found, attempting to create a new sales order...');
+        
+        // Fetch lead data if needed to create a sales order
+        try {
+          const leadResponse = await fetch(`${API_BASE_URL}/resource/Lead/${leadId}`, {
+            headers: getApiHeaders()
+          });
+          
+          if (!leadResponse.ok) {
+            throw new Error(`Failed to fetch lead data: ${leadResponse.statusText}`);
+          }
+          
+          const leadData = await leadResponse.json();
+          
+          if (!leadData || !leadData.data) {
+            throw new Error('No lead data found');
+          }
+          
+          // Create a new sales order with correct item code
+          console.log('Creating new sales order from lead data...');
+          const newSalesOrderData: SalesOrderData = {
+            naming_series: 'SAL-ORD-.YYYY.-',
+            transaction_date: formatDateForFrappe(new Date()),
+            delivery_date: formatDateForFrappe(new Date()),
+            customer: customerName || 'Individual',
+            order_type: 'Sales',
+            currency: currency || 'LKR',
+            items: [
+              {
+                item_code: 'RIFT-DS-LK-ON-25', // Updated item code
+                qty: 1,
+                rate: amount || 0,
+                amount: amount || 0
+              }
+            ],
+            custom_lead_reference: leadId
+          };
+          
+          const salesOrderResponse = await createSalesOrder(newSalesOrderData);
+          
+          if (!salesOrderResponse.success || !salesOrderResponse.data || !salesOrderResponse.data.name) {
+            throw new Error('Failed to create sales order');
+          }
+          
+          salesOrderId = salesOrderResponse.data.name;
+          console.log('Created new sales order:', salesOrderId);
+          setPendingSalesOrderId(salesOrderId);
+        } catch (error) {
+          console.error('Error creating sales order during payment return:', error);
+          setError('Failed to create sales order for payment');
+          return;
+        }
       }
       
       // Fetch the sales order details to get the exact customer name
@@ -234,27 +404,52 @@ export const usePaymentProcess = () => {
       
       if (paymentStatus === 'success') {
         const paymentReference = `PAYHERE-${Date.now()}`;
-        await createSuccessPaymentEntry(
+        const paymentId = await createSuccessPaymentEntry(
           salesOrderId,
           amount,
           currency,
           exactCustomerName,
           paymentReference
         );
+        
+        if (!paymentId) {
+          console.error('Failed to create payment entry, but payment was successful');
+          setError('Failed to record payment in system, but your payment was successful');
+        } else {
+          console.log('Payment entry created successfully:', paymentId);
+        }
       } else {
-        await createZeroPaymentEntry(
+        const paymentId = await createZeroPaymentEntry(
           salesOrderId,
           currency,
           exactCustomerName
         );
+        
+        if (!paymentId) {
+          console.error('Failed to create zero payment entry for cancelled payment');
+        } else {
+          console.log('Zero payment entry created successfully for cancelled payment:', paymentId);
+        }
       }
     } catch (error) {
       console.error('Error processing payment return:', error);
+      setError(`Error processing payment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  };
+  
+  /**
+   * Format a date in YYYY-MM-DD format required by Frappe API
+   */
+  const formatDateForFrappe = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
   
   return {
     processPayherePayment,
+    createOrderForLead,
     createSuccessPaymentEntry,
     createZeroPaymentEntry,
     processPaymentReturn,

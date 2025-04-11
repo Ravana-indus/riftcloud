@@ -46,14 +46,10 @@ export default async function handler(req, res) {
       currency,
       status_code,
       status_message,
-      method,
-      card_holder_name,
-      card_no,
-      card_expiry,
-      customer_token,
-      custom_1, // lead_id
-      custom_2,  // customer_name
-      hash // PayHere hash
+      custom_1: leadId,
+      custom_2: customerName,
+      custom_3: existingSalesOrderId,
+      hash
     } = req.body;
 
     // Verify the hash if provided
@@ -68,15 +64,13 @@ export default async function handler(req, res) {
       console.warn('No hash provided in the payment notification');
     }
 
-    // Extract essential data
-    const leadId = custom_1 || '';
-    const customerName = custom_2 || 'Individual';
     const paymentAmount = parseFloat(amount) || 0;
     const paymentReference = payment_id || `PAYHERE-${Date.now()}`;
     
-    console.log('Extracted payment data:', {
+    console.log('Processing payment with data:', {
       leadId,
       customerName,
+      existingSalesOrderId,
       paymentAmount,
       currency,
       paymentReference
@@ -84,32 +78,39 @@ export default async function handler(req, res) {
 
     // Check if payment is successful (status_code == 2)
     if (status_code == 2) {
-      console.log('Payment successful. Creating sales order...');
+      console.log('Payment successful, processing...');
       
-      // Create sales order with the actual amount from PayHere payment
-      const salesOrderResult = await createSalesOrder({
-        leadId,
-        customerName,
-        itemCode: 'RIFT-DS-LK-ON-25', // Using consistent item code
-        amount: paymentAmount,  // Use actual amount from PayHere payment
-        currency
-      });
+      let salesOrderId = existingSalesOrderId;
 
-      if (!salesOrderResult.success) {
-        console.error('Failed to create sales order:', salesOrderResult.message);
-        return res.status(500).json({
-          message: 'Payment processed but sales order creation failed',
-          error: salesOrderResult.message
+      // Only create new sales order if one doesn't exist
+      if (!salesOrderId) {
+        console.log('No existing sales order found, creating new one...');
+        const salesOrderResult = await createSalesOrder({
+          leadId,
+          customerName,
+          itemCode: 'RIFT-DS-LK-ON-25', // Updated item code
+          amount: paymentAmount,
+          currency
         });
+
+        if (!salesOrderResult.success) {
+          console.error('Failed to create sales order:', salesOrderResult.message);
+          return res.status(500).json({
+            message: 'Payment processed but sales order creation failed',
+            error: salesOrderResult.message
+          });
+        }
+
+        salesOrderId = salesOrderResult.salesOrderId;
+        console.log('Created new sales order:', salesOrderId);
+      } else {
+        console.log('Using existing sales order:', salesOrderId);
       }
 
-      console.log('Sales order created successfully:', salesOrderResult);
-      const salesOrderId = salesOrderResult.salesOrderId;
-
-      // Now create payment entry using the same sales order
+      // Create payment entry using the sales order ID
       console.log('Creating payment entry for sales order:', salesOrderId);
       const paymentResult = await createSuccessPaymentEntry(
-        salesOrderId as string,
+        salesOrderId,
         paymentAmount,
         currency,
         customerName,
@@ -119,7 +120,7 @@ export default async function handler(req, res) {
       if (!paymentResult.success) {
         console.error('Failed to create payment entry:', paymentResult.message);
         return res.status(500).json({
-          message: 'Sales order created but payment entry creation failed',
+          message: 'Payment processed but entry creation failed',
           salesOrderId,
           error: paymentResult.message
         });
