@@ -299,8 +299,6 @@ export const createPaymentEntry = async (
     if (!customerName) {
       console.warn('No customer name provided. Using "Individual" as default.');
       customerName = 'Individual';
-    } else {
-      console.log('Using customer name:', customerName);
     }
 
     // Format date in the required format YYYY-MM-DD
@@ -311,27 +309,32 @@ export const createPaymentEntry = async (
     const paymentEntryData = {
       doctype: 'Payment Entry',
       naming_series: 'ACC-PAY-.YYYY.-',
+      company: 'RIFT UNI',
       posting_date: formattedDate,
       payment_type: 'Receive',
-      mode_of_payment: 'Credit Card',
       party_type: 'Customer',
       party: customerName,
-      paid_to: 'Bank Account - RU',
-      paid_from: 'Debtors - RU',
-      paid_from_account_currency: currency,
+      paid_from: 'Debtors - RU',  // Account where customer owes money
+      paid_to: 'Cash - RU',       // Account where payment is received
       paid_amount: amount,
       received_amount: amount,
+      paid_from_account_currency: currency,
+      paid_to_account_currency: currency,
+      source_exchange_rate: 1.0,
+      target_exchange_rate: 1.0,
       reference_no: paymentReference || `PAYMT-${Date.now()}`,
-      reference_date: formattedDate
+      reference_date: formattedDate,
+      mode_of_payment: 'Credit Card',
+      references: salesOrderId ? [{
+        reference_doctype: 'Sales Order',
+        reference_name: salesOrderId,
+        total_amount: amount,
+        outstanding_amount: amount,
+        allocated_amount: amount,
+      }] : undefined
     };
 
-    // Add sales order reference if provided
-    if (salesOrderId) {
-      console.log(`Adding sales order reference: ${salesOrderId}`);
-      paymentEntryData['custom_sales_order'] = salesOrderId;
-    }
-
-    console.log('Payment entry data:', JSON.stringify(paymentEntryData, null, 2));
+    console.log('Submitting payment entry:', paymentEntryData);
 
     // Call Frappe API to create payment entry
     const response = await fetch(`${API_BASE_URL}/resource/Payment Entry`, {
@@ -343,26 +346,22 @@ export const createPaymentEntry = async (
     const result = await response.json();
 
     if (!response.ok) {
-      // Check if the error is related to customer not found
-      if (result.message && result.message.includes('Could not find Party')) {
-        console.error('Customer validation failed:', result.message);
-        
-        // Try with default "Individual" customer
-        if (customerName !== 'Individual') {
-          console.log('Attempting with default "Individual" customer instead');
-          return createPaymentEntry(amount, currency, 'Individual', salesOrderId, paymentReference);
-        }
-      }
+      console.error('Payment Entry API Error:', result);
       
-      console.error('Failed to create payment entry:', result);
-      throw new Error(`Failed to create payment entry: ${result.message || 'Unknown error'}`);
+      // Check if the error is related to customer not found
+      if (result.exc_type === 'DoesNotExistError' && customerName !== 'Individual') {
+        console.log('Customer not found, retrying with Individual customer');
+        return createPaymentEntry(amount, currency, 'Individual', salesOrderId, paymentReference);
+      }
+
+      throw new Error(result.message || 'Failed to create payment entry');
     }
 
     console.log('Payment entry created successfully:', result);
     return {
       message: 'Payment entry created successfully',
       success: true,
-      paymentId: result.data ? result.data.name : undefined
+      paymentId: result.data?.name
     };
   } catch (error) {
     console.error('Error creating payment entry:', error);

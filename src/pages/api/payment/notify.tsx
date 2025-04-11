@@ -24,7 +24,6 @@ const verifyPayhereHash = (merchantId: string, orderId: string, amount: string, 
 };
 
 export default async function handler(req, res) {
-  // This endpoint should only run on the server
   if (isBrowser) {
     console.error('This API endpoint should only be called server-side');
     return res.status(500).json({ message: 'This endpoint cannot be called from the browser' });
@@ -34,10 +33,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  console.log('Payment notification received:', req.body);
-
   try {
-    // Extract data from request
     const {
       payment_id,
       merchant_id,
@@ -52,68 +48,43 @@ export default async function handler(req, res) {
       hash
     } = req.body;
 
-    // Verify the hash if provided
-    if (hash) {
-      const isValidHash = verifyPayhereHash(merchant_id, order_id, amount, currency, hash);
-      if (!isValidHash) {
-        console.error('Invalid hash received, potential tampering detected');
-        return res.status(400).json({ message: 'Invalid hash, payment verification failed' });
-      }
-      console.log('Payment hash verified successfully');
-    } else {
-      console.warn('No hash provided in the payment notification');
+    console.log('Payment notification received:', {
+      payment_id,
+      order_id,
+      amount,
+      currency,
+      status_code,
+      leadId,
+      customerName,
+      existingSalesOrderId
+    });
+
+    // Validate required fields
+    if (!payment_id || !amount || !currency || !existingSalesOrderId) {
+      console.error('Missing required fields in payment notification');
+      return res.status(400).json({
+        message: 'Missing required fields',
+        missingFields: {
+          payment_id: !payment_id,
+          amount: !amount,
+          currency: !currency,
+          salesOrderId: !existingSalesOrderId
+        }
+      });
     }
 
     const paymentAmount = parseFloat(amount) || 0;
     const paymentReference = payment_id || `PAYHERE-${Date.now()}`;
-    
-    console.log('Processing payment with data:', {
-      leadId,
-      customerName,
-      existingSalesOrderId,
-      paymentAmount,
-      currency,
-      paymentReference
-    });
 
-    // Check if payment is successful (status_code == 2)
-    if (status_code == 2) {
-      console.log('Payment successful, processing...');
+    if (status_code == 2) { // Payment successful
+      console.log('Payment successful, processing payment entry creation...');
       
-      let salesOrderId = existingSalesOrderId;
-
-      // Only create new sales order if one doesn't exist
-      if (!salesOrderId) {
-        console.log('No existing sales order found, creating new one...');
-        const salesOrderResult = await createSalesOrder({
-          leadId,
-          customerName,
-          itemCode: 'RIFT-DS-LK-ON-25', // Updated item code
-          amount: paymentAmount,
-          currency
-        });
-
-        if (!salesOrderResult.success) {
-          console.error('Failed to create sales order:', salesOrderResult.message);
-          return res.status(500).json({
-            message: 'Payment processed but sales order creation failed',
-            error: salesOrderResult.message
-          });
-        }
-
-        salesOrderId = salesOrderResult.salesOrderId;
-        console.log('Created new sales order:', salesOrderId);
-      } else {
-        console.log('Using existing sales order:', salesOrderId);
-      }
-
-      // Create payment entry using the sales order ID
-      console.log('Creating payment entry for sales order:', salesOrderId);
+      // Create payment entry with all required information
       const paymentResult = await createSuccessPaymentEntry(
-        salesOrderId,
+        existingSalesOrderId,
         paymentAmount,
         currency,
-        customerName,
+        customerName || 'Individual',
         paymentReference
       );
 
@@ -121,25 +92,43 @@ export default async function handler(req, res) {
         console.error('Failed to create payment entry:', paymentResult.message);
         return res.status(500).json({
           message: 'Payment processed but entry creation failed',
-          salesOrderId,
-          error: paymentResult.message
+          error: paymentResult.message,
+          salesOrderId: existingSalesOrderId
         });
       }
 
-      console.log('Payment entry created successfully:', paymentResult);
+      console.log('Payment entry created successfully:', {
+        paymentId: paymentResult.paymentId,
+        salesOrderId: existingSalesOrderId,
+        amount: paymentAmount,
+        currency
+      });
       
-      // Return success response
       return res.status(200).json({
-        message: 'Payment processed successfully',
-        salesOrderId,
+        message: 'Payment processed and recorded successfully',
+        salesOrderId: existingSalesOrderId,
         paymentId: paymentResult.paymentId
       });
     } else {
-      console.log('Payment notification received but status code is not success:', status_code);
+      console.log(`Payment not successful (status: ${status_code}), creating zero payment entry...`);
+      
+      // For non-successful payments, create a zero payment entry
+      const zeroPaymentResult = await createZeroPaymentEntry(
+        existingSalesOrderId,
+        currency,
+        customerName || 'Individual'
+      );
+
+      if (!zeroPaymentResult.success) {
+        console.error('Failed to create zero payment entry:', zeroPaymentResult.message);
+      } else {
+        console.log('Zero payment entry created for unsuccessful payment');
+      }
+
       return res.status(200).json({
-        message: 'Payment notification received but not processed (status not success)',
-        status_code,
-        status_message
+        message: `Payment not successful (status: ${status_code})`,
+        status_message,
+        zeroPaymentCreated: zeroPaymentResult.success
       });
     }
   } catch (error) {

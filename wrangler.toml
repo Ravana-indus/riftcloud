@@ -1,6 +1,38 @@
 # Cloudflare Pages configuration
 name = "ravana-iof"
-compatibility_date = "2023-10-30"
+compatibility_date = "2024-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Build configuration
+[build]
+command = "npm run build:cloudflare"
+upload.format = "service-worker"
+
+[build.upload]
+format = "modules"
+
+# Environment variables configuration
+[vars]
+NPM_FLAGS = "--no-audit --no-fund"
+
+[env.production]
+NODE_ENV = "production"
+
+[env.preview]
+NODE_ENV = "development"
 
 # Pages configuration
-pages_build_output_dir = "dist" 
+[pages]
+build_output_dir = "dist"
+assets_dir = "public"
+include = ["_headers", "_redirects", "_routes.json"]
+exclude = ["node_modules/**/*", ".git/**/*"]
+
+# Workers configuration for API routes
+[[routes]]
+pattern = "/api/*"
+script = "api/index.js"
+
+[[routes]]
+pattern = "/*"
+script = "dist/index.html"
